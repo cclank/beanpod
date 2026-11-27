@@ -1,5 +1,7 @@
 # BeanPod 豆仓
 
+> **Customized fork maintained by cclank**, based on [andyhuo520/beanpod](https://github.com/andyhuo520/beanpod). This fork adds authenticated HTTP MCP access and customizable dictation shortcuts, and removes the notch overlay. Development continues on [cclank/beanpod](https://github.com/cclank/beanpod)'s `main` branch; see [fork notes](FORK_NOTES.md). Upstream installers linked below do not contain these changes; this fork currently provides source code.
+
 [简体中文](README.md) | **English**
 
 [![macOS 26](https://img.shields.io/badge/macOS-26-black)](#what-to-prepare-first) [![MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE) [![Renoise MCP](https://img.shields.io/badge/video-Renoise%20MCP-ff7a1a)](https://renoise.ai/mcp?utm_medium=xcom&utm_source=official)
@@ -245,9 +247,9 @@ Menu Help → Connect AI assistants, or Settings → Connect: one card per assis
 | Codex | Runs `codex mcp add beanpod -- ~/.local/bin/beanpod mcp` |
 | OpenClaw | Runs `openclaw mcp add beanpod --command ~/.local/bin/beanpod --arg mcp` |
 | Claude desktop | Adds an entry to `claude_desktop_config.json` (backs it up first as `claude_desktop_config.backup-by-beanpod.json`); quit Claude desktop first, or it will write its own copy back |
-| Grok Bot and other URL-only tools | Copy `http://127.0.0.1:8791/mcp` into them |
+| Native HTTP clients supporting custom headers | Use `http://127.0.0.1:8791/mcp` plus the Authorization header below; Grok Bot custom-header compatibility has not been verified |
 
-The URL endpoint only exists while BeanPod is open, and only listens on this Mac.
+The HTTP endpoint exists while BeanPod is open, binds to `127.0.0.1`, rejects browser origins and non-local Host headers, and requires `Content-Type: application/json` plus `Authorization: Bearer <token>`. Copy the Authorization header from the connection page or run `beanpod http-token`. A stable random credential is stored in `~/Library/Application Support/BeanPod/http-mcp-token` with mode `0600`. Keep it out of URLs and logs and share it only with trusted local clients. Clients without custom-header support should use stdio below. Tests or independent instances can set `BEANPOD_MCP_TOKEN` to a 64-character lowercase hexadecimal credential. Stdio configuration is unchanged.
 
 ### Manual setup
 
@@ -339,7 +341,7 @@ Sources/BeanKit/   Protocol and audio, UI-free, unit-testable
   OpusDecoder.swift  Decoding to WAV
 Sources/beanpod/   CLI and MCP server (bundled in Contents/Helpers)
 Shared/            Shared by Mac and iPhone: Bluetooth, library, transcription and notes pipeline, knowledge base
-App/               Mac UI and Mac-only features (Wi‑Fi transfer, link import, notch panel, AI assistants, …)
+App/               Mac UI and Mac-only features (Wi‑Fi transfer, link import, AI assistants, …)
   SocialDL/          Downloaders for Xiaohongshu, Douyin, WeChat Channels, … (Python)
 Mobile/            iPhone UI (experimental)
 docs/PROTOCOL.md   Protocol notes for the bean, each item sourced
@@ -371,3 +373,7 @@ Transcription uses Qwen3‑ASR (GGUF from [ggml-org/Qwen3-ASR-0.6B-GGUF](https:/
 ## License
 
 [MIT](LICENSE)
+
+### Custom dictation shortcut
+
+In Settings → Dictation, click “换一个键…” (Change key), press a key or a modifier-key combination, then release it to save. Ordinary letters, numbers, Space, arrow keys, F1–F20, and modifier-only shortcuts are supported. Existing modifier-only settings are preserved. Global use requires Accessibility permission; the shortcut listener must show ready. The assigned ordinary key/chord is consumed so its character does not reach the foreground app. Releasing the trigger or any required modifier ends capture. Caps Lock is a lock key and cannot be used as a hold trigger; system-reserved media keys may be handled directly by macOS.

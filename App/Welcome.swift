@@ -271,7 +271,7 @@ struct WelcomeView: View {
             heading(String(localized: "更多功能（都是可选的）"), String(localized: "用得上再开。都可以以后在设置或设备页里打开。"))
             VStack(spacing: 0) {
                 row(icon: "keyboard", title: String(localized: "语音输入"),
-                    detail: store.settings.dictationEnabled ? String(localized: "已打开：按住\(Dictation.name(of: store.settings.dictationKey).components(separatedBy: " ").prefix(2).joined(separator: " "))说话，松开文字打进当前的软件。说过的话记在侧栏「语音输入」。")
+                    detail: store.settings.dictationEnabled ? String(localized: "已打开：按住\(Dictation.name(of: store.settings.dictationKey, modifiers: store.settings.dictationModifiers))说话，松开文字打进当前的软件。说过的话记在侧栏「语音输入」。")
                         : String(localized: "按住一个键对着录音豆或麦克风说话，松开后文字直接打进当前的软件，像输入法一样。要「辅助功能」权限。"),
                     ok: store.settings.dictationEnabled) {
                     Button("去设置") { SettingsView.open(.dictation, with: openSettings) }.buttonStyle(.glass)

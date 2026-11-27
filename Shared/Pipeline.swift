@@ -832,6 +832,13 @@ extension BeanStore {
 
     static let mcpPort = 8791
     static var mcpAddress: String { "http://127.0.0.1:\(mcpPort)/mcp" }
+    static var mcpAuthorization: String? {
+        let file = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("BeanPod/http-mcp-token")
+        guard let token = ProcessInfo.processInfo.environment["BEANPOD_MCP_TOKEN"] ?? (try? String(contentsOf: file, encoding: .utf8)),
+              token.utf8.count == 64, token.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) else { return nil }
+        return "Bearer \(token)"
+    }
     #if os(macOS)
     static var cliPath: String { FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin/beanpod").path }
     /// App 包里带的那份（Contents/Helpers/beanpod）。

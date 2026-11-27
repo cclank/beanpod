@@ -33,7 +33,7 @@ struct DictationView: View {
                 HStack(alignment: .top, spacing: 16) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("语音输入").font(.system(size: 28, weight: .bold)).foregroundStyle(Theme.warm900)
-                        Text("按住\(Dictation.name(of: store.settings.dictationKey).components(separatedBy: " ").prefix(2).joined(separator: " "))说话，文字打进当前的软件，同时记在这里。不进录音列表，也不做 AI 整理。")
+                        Text("按住\(Dictation.name(of: store.settings.dictationKey, modifiers: store.settings.dictationModifiers))说话，文字打进当前的软件，同时记在这里。不进录音列表，也不做 AI 整理。")
                             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 12)

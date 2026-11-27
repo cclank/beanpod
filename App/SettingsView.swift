@@ -284,7 +284,7 @@ private struct DictationPane: View {
         let on = settings.dictationEnabled
         PaneFrame {
             SettingsGroup(footer: String(localized: "把录音豆当随身麦克风：在任何 App 里按住你选的那个键，对着录音豆说话，松开后文字出现在光标处。")) {
-                SettingRow(icon: "mic.fill", title: String(localized: "按住按键说话，松开输入文字"), detail: on ? String(localized: "已打开。按住「\(Dictation.name(of: settings.dictationKey))」试试。") : String(localized: "关着的时候，豆仓不会监听任何按键。")) {
+                SettingRow(icon: "mic.fill", title: String(localized: "按住按键说话，松开输入文字"), detail: on ? String(localized: "已打开。按住「\(Dictation.name(of: settings.dictationKey, modifiers: settings.dictationModifiers))」试试。") : String(localized: "关着的时候，豆仓不会监听任何按键。")) {
                     Toggle("语音输入", isOn: Binding(get: { settings.dictationEnabled }, set: {
                         settings.dictationEnabled = $0
                         dictation.refresh()
@@ -295,20 +295,29 @@ private struct DictationPane: View {
             }
 
             SettingsGroup(String(localized: "怎么用")) {
-                SettingRow(icon: "keyboard", title: String(localized: "按住这个键"), detail: dictation.recordingKey ? String(localized: "现在按下你想用的那个键…") : nil) {
-                    Picker("按住这个键", selection: $settings.dictationKey) {
+                SettingRow(icon: "keyboard", title: String(localized: "按住这个键"), detail: dictation.recordingKey ? (dictation.recordingKeyHint ?? String(localized: "按下你想用的按键或组合键，松开完成设置…")) : String(localized: "支持字母、数字、空格、方向键、F 键及组合键。")) {
+                    Picker("按住这个键", selection: Binding(get: {
+                        settings.dictationModifiers == 0 && Dictation.keys.contains(where: { $0.code == settings.dictationKey }) ? settings.dictationKey : -1
+                    }, set: { code in
+                        guard code >= 0 else { return }
+                        dictation.cancelRecordingKey()
+                        settings.dictationKey = code
+                        settings.dictationModifiers = 0
+                    })) {
                         ForEach(Dictation.keys, id: \.code) { Text($0.name).tag($0.code) }
-                        if !Dictation.keys.contains(where: { $0.code == settings.dictationKey }) {
-                            Text(Dictation.name(of: settings.dictationKey)).tag(settings.dictationKey)
+                        if settings.dictationModifiers != 0 || !Dictation.keys.contains(where: { $0.code == settings.dictationKey }) {
+                            Text(Dictation.name(of: settings.dictationKey, modifiers: settings.dictationModifiers)).tag(-1)
                         }
                     }
                     .labelsHidden().fixedSize()
                     Button(dictation.recordingKey ? "取消" : "换一个键…") {
-                        dictation.recordingKey.toggle()
-                        dictation.refresh()
+                        if dictation.recordingKey { dictation.cancelRecordingKey() }
+                        else { dictation.beginRecordingKey() }
                     }
-                    .help("点一下，然后按下你想用的修饰键")
+                    .help("点一下，再按下并松开你想用的按键或组合键，例如 F8、空格、⌃⌥K。")
                 }
+                Text("选中的普通按键会用于语音输入，不再输入原字符；组合键松开任意一部分即结束。Caps Lock 和系统保留的媒体键不适合作为按住触发键。")
+                    .font(.caption).foregroundStyle(.secondary)
                 SettingRow(icon: "text.badge.checkmark", title: String(localized: "把口语理顺再输入"), detail: String(localized: "去掉嗯啊和重复，句子更通顺。要多等几秒。")) {
                     Toggle("把口语理顺再输入", isOn: $settings.dictationPolish).labelsHidden().toggleStyle(.switch)
                 }
@@ -343,9 +352,16 @@ private struct DictationPane: View {
                         Button("重新检查") { trusted = AXIsProcessTrusted(); dictation.refresh() }
                     }
                 }
+                SettingRow(icon: "keyboard", title: String(localized: "全局快捷键"), detail: String(localized: "就绪后，在其他软件里也能按住快捷键说话。")) {
+                    StatusPill(ok: dictation.listenerReady, text: dictation.listenerReady ? String(localized: "已就绪") : String(localized: "未启动"))
+                    Button("重新检查") { trusted = AXIsProcessTrusted(); dictation.refresh() }
+                }
             }
         }
-        .onAppear { trusted = AXIsProcessTrusted() }
+        .onAppear { trusted = AXIsProcessTrusted(); dictation.refresh() }
+        .onDisappear { dictation.cancelRecordingKey() }
+        .onChange(of: settings.dictationKey) { dictation.refresh() }
+        .onChange(of: settings.dictationModifiers) { dictation.refresh() }
     }
 }
 
@@ -946,7 +962,7 @@ private struct ConnectPane: View {
 
             LoginsGroup()
 
-            SettingsGroup(String(localized: "给其他工具用"), footer: String(localized: "这个地址只在这台电脑上能访问，而且只有豆仓开着的时候才通。")) {
+            SettingsGroup(String(localized: "给其他工具用"), footer: String(localized: "HTTP 入口只接受带访问凭证的本机客户端；在连接页面拷贝 Authorization 请求头。客户端需支持自定义请求头。")) {
                 SettingRow(icon: "network", title: String(localized: "接入地址")) {
                     Text(BeanStore.mcpAddress).font(.callout.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
                     Button(copied ? "已拷贝" : "拷贝") {

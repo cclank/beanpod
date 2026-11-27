@@ -300,62 +300,70 @@ func runMCP() {
 
 /// 同一套工具，换成 HTTP 入口：POST /mcp，一个请求一个 JSON 回答。只监听 127.0.0.1。
 func runHTTP(port: UInt16) {
+    let token: String
+    do { token = try HTTPAccess.token() }
+    catch { fputs("HTTP MCP: \(error)\n", stderr); exit(1) }
     let params = NWParameters.tcp
-    params.acceptLocalOnly = true          // 只接受本机发来的连接
+    params.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port)!)
+    params.acceptLocalOnly = true
     params.allowLocalEndpointReuse = true
-    guard let nwPort = NWEndpoint.Port(rawValue: port), let listener = try? NWListener(using: params, on: nwPort) else {
+    guard let listener = try? NWListener(using: params) else {
         print("端口 \(port) 用不了"); exit(1)
     }
     listener.newConnectionHandler = { conn in
         conn.start(queue: .global())
-        receive(conn, Data())
+        let deadline = DispatchWorkItem { conn.cancel() }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 15, execute: deadline)
+        receive(conn, Data(), port: port, token: token, deadline: deadline)
     }
     listener.stateUpdateHandler = { state in
         if case .failed(let e) = state { print("监听失败：\(e)"); exit(1) }
         if case .waiting(let e) = state { print("端口 \(port) 暂时用不了：\(e)"); exit(1) }
-        if case .ready = state { print("豆仓 MCP 已在 http://127.0.0.1:\(port)/mcp 就绪") ; fflush(stdout) }
+        if case .ready = state { print("豆仓 MCP 已在 http://127.0.0.1:\(port)/mcp 就绪（需要 Bearer 凭证；beanpod http-token 查看）"); fflush(stdout) }
     }
     listener.start(queue: .global())
     dispatchMain()
 }
 
-func receive(_ conn: NWConnection, _ buffer: Data) {
-    conn.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { data, _, done, error in
+func httpReply(_ conn: NWConnection, _ status: String, _ payload: Data = Data()) {
+    var out = Data("HTTP/1.1 \(status)\r\nContent-Type: application/json\r\nContent-Length: \(payload.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8)
+    out.append(payload)
+    conn.send(content: out, completion: .contentProcessed { _ in conn.cancel() })
+}
+
+func receive(_ conn: NWConnection, _ buffer: Data, port: UInt16, token: String, deadline: DispatchWorkItem) {
+    conn.receive(minimumIncompleteLength: 1, maximumLength: 64 << 10) { data, _, done, error in
         var buf = buffer
         if let data { buf.append(data) }
-        // 等头部收完，再按 Content-Length 等正文收完
         if let headEnd = buf.range(of: Data("\r\n\r\n".utf8)) {
-            let head = String(decoding: buf[..<headEnd.lowerBound], as: UTF8.self)
-            let length = head.split(separator: "\r\n").first { $0.lowercased().hasPrefix("content-length:") }
-                .flatMap { Int($0.split(separator: ":")[1].trimmingCharacters(in: .whitespaces)) } ?? 0
-            let body = buf[headEnd.upperBound...]
-            if body.count >= length {
-                respond(conn, requestLine: String(head.split(separator: "\r\n").first ?? ""), body: Data(body.prefix(length)))
-                return
-            }
+            do {
+                let head = try HTTPHead(Data(buf[..<headEnd.lowerBound]))
+                // Validate before waiting for a body and before any MCP operation.
+                if let rejected = head.rejection(port: port, token: token) { httpReply(conn, rejected); return }
+                let body = buf[headEnd.upperBound...]
+                if body.count >= head.length {
+                    deadline.cancel()
+                    respond(conn, head: head, body: Data(body.prefix(head.length)))
+                    return
+                }
+            } catch let failure as HTTPAccess.Failure { httpReply(conn, failure.description); return }
+            catch { httpReply(conn, "400 Bad Request"); return }
+        } else if buf.count > HTTPAccess.maxHead {
+            httpReply(conn, "431 Request Header Fields Too Large"); return
         }
-        if done || error != nil || buf.count > 8 << 20 { conn.cancel(); return }
-        receive(conn, buf)
+        if done || error != nil { conn.cancel(); return }
+        receive(conn, buf, port: port, token: token, deadline: deadline)
     }
 }
 
-func respond(_ conn: NWConnection, requestLine: String, body: Data) {
-    func reply(_ status: String, _ payload: Data, type: String = "application/json") {
-        var out = Data("HTTP/1.1 \(status)\r\nContent-Type: \(type)\r\nContent-Length: \(payload.count)\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nConnection: close\r\n\r\n".utf8)
-        out.append(payload)
-        conn.send(content: out, completion: .contentProcessed { _ in conn.cancel() })
-    }
-    let parts = requestLine.split(separator: " ")
-    let method = parts.first.map(String.init) ?? "", path = parts.count > 1 ? String(parts[1]) : "/"
-    if method == "OPTIONS" { reply("204 No Content", Data()); return }
-    if method == "GET", path == "/health" { reply("200 OK", Data("{\"ok\":true}".utf8)); return }
-    guard method == "POST" else { reply("405 Method Not Allowed", Data("{\"error\":\"use POST\"}".utf8)); return }
-    guard let json = try? JSONSerialization.jsonObject(with: body) else { reply("400 Bad Request", Data("{\"error\":\"bad json\"}".utf8)); return }
+func respond(_ conn: NWConnection, head: HTTPHead, body: Data) {
+    if head.method == "GET", head.path == "/health" { httpReply(conn, "200 OK", Data("{\"ok\":true}".utf8)); return }
+    guard let json = try? JSONSerialization.jsonObject(with: body) else { httpReply(conn, "400 Bad Request"); return }
     let messages = (json as? [[String: Any]]) ?? (json as? [String: Any]).map { [$0] } ?? []
     let replies = messages.compactMap(handle)
-    if replies.isEmpty { reply("202 Accepted", Data()); return }
+    if replies.isEmpty { httpReply(conn, "202 Accepted"); return }
     let payload: Any = (json is [Any]) ? replies : replies[0]
-    reply("200 OK", (try? JSONSerialization.data(withJSONObject: payload)) ?? Data())
+    httpReply(conn, "200 OK", (try? JSONSerialization.data(withJSONObject: payload)) ?? Data())
 }
 
 // MARK: - 命令行
@@ -370,7 +378,12 @@ func option(_ name: String) -> String? {
 let command = args.isEmpty ? "help" : args.removeFirst()
 switch command {
 case "mcp": runMCP()
-case "serve": runHTTP(port: option("--port").flatMap(UInt16.init) ?? 8791)
+case "serve":
+    let supplied = option("--port")
+    guard supplied == nil || (supplied.flatMap(UInt16.init).map { $0 > 0 } ?? false) else { fputs("Invalid HTTP port\n", stderr); exit(1) }
+    runHTTP(port: supplied.flatMap(UInt16.init) ?? 8791)
+case "http-token":
+    do { print(try HTTPAccess.token()) } catch { fputs("HTTP MCP: \(error)\n", stderr); exit(1) }
 case "search":
     var q = Query()
     q.scene = option("--scene"); q.person = option("--person"); q.tag = option("--tag")
@@ -393,7 +406,8 @@ default:
     beanpod：让别的工具读写豆仓
 
       beanpod mcp                          作为 MCP 服务运行，给 Claude、OpenClaw、Grok 等 agent 用
-      beanpod serve [--port 8791]          同上，但走 HTTP，地址是 http://127.0.0.1:8791/mcp
+      beanpod serve [--port 8791]          HTTP MCP，只绑定 127.0.0.1，要求 Authorization: Bearer <凭证>
+      beanpod http-token                 查看 HTTP 凭证，只交给你信任的本机客户端
       beanpod search [关键词] [--from 日期] [--to 日期] [--scene 场景] [--person 人物] [--tag 话题] [--limit N]
       beanpod show <id> [--transcript]     一条录音的纪要
       beanpod todos [--all]                待办

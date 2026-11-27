@@ -8908,16 +8908,6 @@
         }
       }
     },
-    "显示刘海快捷面板": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show Notch Panel"
-          }
-        }
-      }
-    },
     "晚上好": {
       "localizations": {
         "en": {
@@ -11806,26 +11796,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Preview: Charging"
-          }
-        }
-      }
-    },
-    "看看：刘海打印胶片（录完）": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Preview: Notch Film Print (Recording Done)"
-          }
-        }
-      }
-    },
-    "看看：刘海探头（开始录音）": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Preview: Notch Peek (Start Recording)"
           }
         }
       }
@@ -15560,16 +15530,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ready whenever you are. I'll remember it all."
-          }
-        }
-      }
-    },
-    "隐藏刘海快捷面板": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hide Notch Panel"
           }
         }
       }

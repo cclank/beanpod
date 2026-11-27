@@ -81,6 +81,8 @@ final class AppSettings {
     /// 语音输入时用分析模型把口语理顺。更通顺，但要多等几秒。
     /// 按住哪个键说话。存的是按键码，默认右 Option（61）。
     var dictationKey: Int { didSet { save("dictationKey", dictationKey) } }
+    /// Modifiers accompanying the physical key, using DictationShortcut.Modifiers bits. Old settings default to zero.
+    var dictationModifiers: Int { didSet { save("dictationModifiers", dictationModifiers) } }
     var dictationPolish: Bool { didSet { save("dictationPolish", dictationPolish) } }
     /// 语音输入说的话，同时记进侧栏的「语音输入」（默认开）。不进录音列表。
     var dictationSave: Bool { didSet { save("dictationSave", dictationSave) } }
@@ -152,6 +154,7 @@ final class AppSettings {
         dictationAudioDays = d.object(forKey: "dictationAudioDays") as? Int ?? 30
         dictationInKnowledge = d.object(forKey: "dictationInKnowledge") as? Bool ?? false
         dictationKey = d.object(forKey: "dictationKey") as? Int ?? 61
+        dictationModifiers = d.object(forKey: "dictationModifiers") as? Int ?? 0
         deviceAlias = d.string(forKey: "deviceAlias") ?? ""
         llmBaseURL = d.string(forKey: "llmBaseURL") ?? ""
         llmModel = d.string(forKey: "llmModel") ?? ""

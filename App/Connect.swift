@@ -33,7 +33,7 @@ enum Assistant: String, CaseIterable, Identifiable {
         case .claudeDesktop: String(localized: "在 Claude 里说：「豆仓里关于新品发布都说过什么？」")
         case .codex: String(localized: "在 Codex 里说：「把豆仓里最新一条录音的脚本拿出来，做成网页」")
         case .openclaw: String(localized: "在微信里对它说：「帮我查豆仓，这周答应了谁什么事」")
-        case .grok: String(localized: "在 Grok Bot 里添加上面的地址，然后说：「搜一下豆仓里提到黄仁勋的录音」")
+        case .grok: String(localized: "客户端需要支持自定义 Authorization 请求头；配置地址和访问凭证后再测试连接。")
         }
     }
 
@@ -44,7 +44,7 @@ enum Assistant: String, CaseIterable, Identifiable {
         case .claudeDesktop: String(localized: "改 ~/Library/Application Support/Claude/claude_desktop_config.json，改之前会留一份备份。要在 Claude 完全退出的时候连")
         case .codex: String(localized: "用 codex 命令添加，写在 ~/.codex/config.toml")
         case .openclaw: String(localized: "用 openclaw 命令添加，写在 ~/.openclaw/openclaw.json")
-        case .grok: String(localized: "Grok Bot 只认网址：拷贝豆仓的地址，到它的设置里粘贴。豆仓要开着才连得上")
+        case .grok: String(localized: "HTTP 接入需要地址和 Authorization 请求头。请先确认客户端支持自定义请求头；豆仓要开着才连得上。")
         }
     }
 
@@ -162,7 +162,7 @@ final class Connector {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(BeanStore.mcpAddress, forType: .string)
             NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/Grok Bot.app"))
-            notes[a] = (true, String(localized: "地址已经拷贝，Grok Bot 也打开了。到它的设置里添加一个 MCP，把地址粘贴进去。"))
+            notes[a] = (true, String(localized: "地址已拷贝。还需要拷贝下方的 Authorization 请求头；客户端不支持请求头时，请改用 stdio 接入。"))
         }
         await refresh()
     }
@@ -205,8 +205,13 @@ final class Connector {
             notes[a] = r.output.contains("Connected") ? (true, String(localized: "通了：Claude Code 报告已连接，豆仓给了它 \(max(tools - 1, 1)) 个可用的动作。"))
                 : (false, String(localized: "豆仓这边正常，但 Claude Code 说没连上：\(Self.tail(r.output))"))
         case .grok:
-            let r = await Self.shell("curl -s -m 4 -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '\(list)' \(BeanStore.mcpAddress)")
-            notes[a] = r.output.contains("200") ? (true, String(localized: "豆仓的网址入口是通的。Grok Bot 那边有没有填对，要在它里面问一句才知道。"))
+            var request = URLRequest(url: URL(string: BeanStore.mcpAddress)!, timeoutInterval: 4)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(BeanStore.mcpAuthorization, forHTTPHeaderField: "Authorization")
+            request.httpBody = Data(list.utf8)
+            let response = try? await URLSession.shared.data(for: request).1 as? HTTPURLResponse
+            notes[a] = response?.statusCode == 200 ? (true, String(localized: "豆仓的鉴权 HTTP 入口正常。客户端还需要支持并配置 Authorization 请求头。"))
                 : (false, String(localized: "豆仓的网址入口没应答，重开一次豆仓再试。"))
         default:
             notes[a] = (true, String(localized: "豆仓这边的入口是通的。\(a.name) 那边要新开一个会话问一句才算真的验证。"))
@@ -276,8 +281,16 @@ struct ConnectView: View {
                     Text("别的工具").font(.headline)
                     Text("支持 MCP 的工具都能接。能运行命令的填：").font(.callout).foregroundStyle(.secondary)
                     copyRow(BeanStore.cliPath + " mcp")
-                    Text("只认网址的填（豆仓开着时才有）：").font(.callout).foregroundStyle(.secondary)
+                    Text("支持自定义请求头的 HTTP 客户端填（豆仓开着时才有）：").font(.callout).foregroundStyle(.secondary)
                     copyRow(BeanStore.mcpAddress)
+                    Button("拷贝 Authorization 请求头") {
+                        if let value = BeanStore.mcpAuthorization {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString("Authorization: " + value, forType: .string)
+                        }
+                    }
+                    Text("访问凭证只交给你信任的本机客户端；浏览器网页不能访问这个入口。")
+                        .font(.caption).foregroundStyle(.secondary)
                     Text("这两个入口都只在这台 Mac 上有效，录音不会经过别的服务器。助手拿到内容之后怎么处理，取决于那个助手自己。")
                         .font(.caption).foregroundStyle(.tertiary).padding(.top, 2)
                 }

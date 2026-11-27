@@ -1,5 +1,7 @@
 # 豆仓 BeanPod
 
+> **cclank 维护的改造版**，基于 [andyhuo520/beanpod](https://github.com/andyhuo520/beanpod)。已加入 HTTP MCP 鉴权、自定义语音输入按键，并移除刘海浮层。后续改造以 [cclank/beanpod](https://github.com/cclank/beanpod) 的 `main` 分支为准，详见 [改造说明](FORK_NOTES.md)。下文链接到上游的安装包不包含这些改动，本仓库当前提供源码。
+
 **简体中文** | [English](README.en.md)
 
 [![macOS 26](https://img.shields.io/badge/macOS-26-black)](#开始前要准备的东西) [![MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE) [![Renoise MCP](https://img.shields.io/badge/video-Renoise%20MCP-ff7a1a)](https://renoise.ai/mcp?utm_medium=xcom&utm_source=official)
@@ -79,7 +81,7 @@
 - 没连录音豆时用 Mac 录：麦克风、电脑里的声音，或者两路一起
 - 导入音频文件，或贴视频、播客链接（YouTube、B 站、抖音、小红书、视频号、微博、喜马拉雅、Apple 播客等）。只用于你有权使用的公开内容
 - 视频素材可以连画面一起留着（最高 720p）：默认 5 分钟以内的留，更长的只留声音，导入时也能单独勾选；素材详情里看画面，画面跟着播放条走。设置里能看到画面占了多少空间、一键清理（只删画面，声音和文字稿都留着），只有声音的素材也能事后补下画面
-- 语音输入：按住一个键对着录音豆说话，松开后文字打进当前正在用的软件。说过的话记在侧栏单独的「语音输入」里（像输入法的历史：能回听、拷贝、搜索，记着打进了哪个软件），不混进录音列表、不做 AI 整理，重要的可以「转成录音」。原声默认留 30 天、文字一直留着；知识库默认不搜它们，都能在设置里改
+- 语音输入：可自定义普通按键或组合键（如 F8、空格、⌃⌥K），按住对着录音豆说话，松开后文字打进当前正在用的软件。说过的话记在侧栏单独的「语音输入」里（像输入法的历史：能回听、拷贝、搜索，记着打进了哪个软件），不混进录音列表、不做 AI 整理，重要的可以「转成录音」。原声默认留 30 天、文字一直留着；知识库默认不搜它们，都能在设置里改
 
 ![语音输入：像输入法的历史，记着每句打进了哪个软件](docs/screenshots/dictation.jpg)
 
@@ -247,9 +249,9 @@ open -a BeanPod --args -demo
 | Codex | 运行 `codex mcp add beanpod -- ~/.local/bin/beanpod mcp` |
 | OpenClaw | 运行 `openclaw mcp add beanpod --command ~/.local/bin/beanpod --arg mcp` |
 | Claude 桌面版 | 往 `claude_desktop_config.json` 加一项（改之前先备份成 `claude_desktop_config.backup-by-beanpod.json`）；要先退出 Claude 桌面版，否则它会把改动写回去 |
-| Grok Bot 等只认网址的 | 拷贝网址 `http://127.0.0.1:8791/mcp` 填进去 |
+| 支持自定义请求头的本机 HTTP 客户端 | 填入 `http://127.0.0.1:8791/mcp`，并配置下述 Authorization 请求头；Grok Bot 的自定义请求头兼容性尚未验证 |
 
-网址入口只在豆仓开着时存在，而且只监听本机，别的电脑连不上。
+HTTP 入口只在豆仓开着时存在，绑定 `127.0.0.1`，拒绝浏览器来源及非本机 Host，要求 `Content-Type: application/json` 和 `Authorization: Bearer <凭证>`。在连接页面拷贝 Authorization 请求头，或运行 `beanpod http-token` 查看凭证。凭证首次生成后保存在 `~/Library/Application Support/BeanPod/http-mcp-token`，权限为 `0600`，重启后继续使用；不要把它放进网址、日志或交给不信任的工具。客户端不支持自定义请求头时，使用下面的 stdio 配置。测试或独立实例也可通过 `BEANPOD_MCP_TOKEN` 指定 64 位小写十六进制凭证。stdio 接入方式不变。
 
 ### 手动配置
 
@@ -341,7 +343,7 @@ Sources/BeanKit/   协议与音频，不依赖界面，可单独测试
   OpusDecoder.swift  解码成 WAV
 Sources/beanpod/   命令行工具与 MCP 服务（随 App 打包在 Contents/Helpers）
 Shared/            Mac 和 iPhone 共用：蓝牙、录音库、转写与整理流程、知识库
-App/               Mac 界面与 Mac 专属功能（Wi‑Fi 快传、链接导入、刘海面板、连接 AI 助手等）
+App/               Mac 界面与 Mac 专属功能（Wi‑Fi 快传、链接导入、连接 AI 助手等）
   SocialDL/          小红书、抖音、视频号等平台的下载器（Python）
 Mobile/            iPhone 版界面（试验中）
 docs/PROTOCOL.md   录音豆的协议笔记，逐条标注了来源
@@ -373,3 +375,7 @@ scripts/           示例录音库生成脚本
 ## 许可证
 
 [MIT](LICENSE)
+
+### 自定义语音输入快捷键
+
+在「设置 → 语音输入」点击「换一个键…」，按下并松开一个普通按键或组合键即可保存；「取消」会保留原设置。字母、数字、空格、方向键、F1–F20 和修饰键均可选，原有单修饰键设置继续有效。全局触发需要辅助功能权限，「全局快捷键」显示「已就绪」后可在其他软件使用。选中的普通按键及组合键会被语音输入占用，避免将触发字符输入到光标处；松开触发键或组合键中的任一修饰键即结束。Caps Lock 是锁定键，不支持用作按住触发键；系统保留的媒体键可能由 macOS 直接处理。

@@ -9,7 +9,6 @@ struct BeanPodApp: App {
     @State private var maker = VideoMaker()
     @State private var renoise = RenoiseSetup()
     @State private var clipboard = ClipboardWatch()
-    @State private var notch = NotchPanel()
     @Environment(\.openWindow) private var openWindow
 
     var body: some SwiftUI.Scene {
@@ -18,7 +17,6 @@ struct BeanPodApp: App {
                 .environment(store).environment(nav).environment(dictation).environment(connector).environment(maker).environment(renoise).environment(clipboard)
                 .task { dictation.attach(store) }
                 .task { await maker.watch(store) }   // 接着跟上次交给 Claude 还没做完的视频
-                .task { notch.attach(store) }        // 刘海快捷面板
                 .task { FeishuSync.shared.attach(store) }   // 手机同步进飞书妙记的录音，拉回来
                 .frame(minWidth: 980, minHeight: 600)
                 .containerBackground(.clear, for: .window)
@@ -60,7 +58,6 @@ struct BeanPodApp: App {
                 Button(nav.stageOpen ? "收起录音舞台" : "打开录音舞台") { nav.stageOpen.toggle() }
                     .keyboardShortcut("l", modifiers: .command)
                     .disabled(store.recState == .idle)
-                Button(notch.visible ? "隐藏刘海快捷面板" : "显示刘海快捷面板") { notch.setVisible(!notch.visible) }
                 Divider()
                 // 删除选中的那条录音。都会先问一句，不会直接删
                 let chosen = store.recordings.first { $0.id == nav.selection }
@@ -145,9 +142,6 @@ struct BeanPodApp: App {
                 Button("看看：转写中") { store.mascotPreview = (.writing, .mid) }
                 Button("看看：整理中") { store.mascotPreview = (.thinking, .mid) }
                 Button("看看：开心") { store.mascotPreview = (.happy, .mid) }
-                Divider()
-                Button("看看：刘海探头（开始录音）") { notch.preview(peek: true) }
-                Button("看看：刘海打印胶片（录完）") { notch.preview(peek: false) }
             }
         }
 
